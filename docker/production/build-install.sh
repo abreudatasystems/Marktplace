@@ -39,6 +39,12 @@ mysql -h 127.0.0.1 -u root < /docker-entrypoint-initdb.d/init.sql
 # Install Bagisto
 cd /var/www/bagisto
 
+# Temporarily set APP_ENV=local in .env so Laravel's production guards
+# (db:wipe, migrate:fresh, db:seed) don't prompt/cancel in the build.
+# The shell export alone is not enough because Dotenv reads the .env file
+# at PHP boot and sets APP_ENV before artisan even parses argv.
+sed -i 's/^APP_ENV=.*/APP_ENV=local/' .env
+
 echo "[build-install] Generating application key..."
 php artisan key:generate --force --no-interaction
 
@@ -46,10 +52,13 @@ echo "[build-install] Running Bagisto installation..."
 php artisan bagisto:install --skip-env-check --skip-admin-creation --skip-github-star --no-interaction
 
 echo "[build-install] Running database seeders..."
-php artisan db:seed --class="Webkul\\Installer\\Database\\Seeders\\ProductTableSeeder"
+php artisan db:seed --class="Webkul\\Installer\\Database\\Seeders\\ProductTableSeeder" --force --no-interaction
 
 echo "[build-install] Running indexers..."
 php artisan index:index --mode=full
+
+# Restore production environment in the baked image
+sed -i 's/^APP_ENV=.*/APP_ENV=production/' .env
 
 # Shut down MySQL cleanly
 echo "[build-install] Shutting down MySQL..."
